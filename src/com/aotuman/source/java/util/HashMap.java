@@ -697,20 +697,43 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      *
      * @return the table
      */
+    /**
+     * 对table进行初始化或者扩容。
+     * 如果table为null，则对table进行初始化
+     * 如果对table扩容，因为每次扩容都是翻倍，与原来计算（n-1）&hash的结果相比，节点要么就在原来的位置，
+     * 要么就被分配到“原位置+旧容量”这个位置。
+     */
     final Node<K,V>[] resize() {
+        // oldTab:引用扩容前的哈希表
         Node<K,V>[] oldTab = table;
+        // oldCap:表示扩容之前table数组的长度
         int oldCap = (oldTab == null) ? 0 : oldTab.length;
+        // oldThr:表示本次扩容之前的阈值，触发本次扩容操作的阈值
         int oldThr = threshold;
+        // newCap:表示扩容之后table数组的大小；
+        // newThr:表示扩容之后，下次触发扩容的阈值
         int newCap, newThr = 0;
+
+        //===================给newCap和newThr赋值start=============================
+        // oldCap大于零，说明hashmap中的散列表已经初始化过了，这次要进行正常的扩容操作
         if (oldCap > 0) {
+            // 扩容之前的table数组大小已经达到最大阈值了，则不再扩容了
             if (oldCap >= MAXIMUM_CAPACITY) {
                 threshold = Integer.MAX_VALUE;
                 return oldTab;
             }
+            // （1）进行翻倍扩容
+            // oldCap左移一倍实现数值翻倍，并且赋值给newCap, newCap 小于最大阈值 并且 扩容之前的数组长度 >= 16
+            // (假如旧的oldCap为8， < DEFAULT_INITIAL_CAPACITY，那么此条件不成立newThr将不会赋值)
             else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
                      oldCap >= DEFAULT_INITIAL_CAPACITY)
                 newThr = oldThr << 1; // double threshold
         }
+        // （2）
+        // oldCap == 0（说明hashmap中的散列表是null）且oldThr > 0 ；下面几种情况都会出现oldCap == 0,oldThr > 0
+        // 1.public HashMap(int initialCapacity);
+        // 2.public HashMap(Map<? extends K, ? extends V> m);并且这个map有数据
+        // 3.public HashMap(int initialCapacity, float loadFactor);
         else if (oldThr > 0) // initial capacity was placed in threshold
             newCap = oldThr;
         else {               // zero initial threshold signifies using defaults
@@ -722,25 +745,45 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ?
                       (int)ft : Integer.MAX_VALUE);
         }
+        //===================给newCap和newThr赋值end=============================
+
         threshold = newThr;
         @SuppressWarnings({"rawtypes","unchecked"})
         Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
         table = newTab;
+        // hashMap本次扩容之前，table不为空
         if (oldTab != null) {
             for (int j = 0; j < oldCap; ++j) {
+                // 当前node节点
                 Node<K,V> e;
+                // 头结点不为空
                 if ((e = oldTab[j]) != null) {
+                    // 将对应的桶位指向null，方便jvm回收
                     oldTab[j] = null;
+
+                    // 1.如果只有一个节点
                     if (e.next == null)
                         newTab[e.hash & (newCap - 1)] = e;
+
+                    // 2.树化了
                     else if (e instanceof TreeNode)
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
+
+                    // 3.还是链表
                     else { // preserve order
+
+                        // 情况1：扩容后，若hash值 新增参与运算的位 = 0，那么元素在扩容后的位置 = 原始位置
+                        // 情况2：扩容后，若hash值 新增参与运算的位 = 1，那么元素在扩容后的位置 = 原始位置 + 扩容前的旧容量
+
+                        // 低位链表：存放在扩容之后的数组下标的位置，与当前数组下标位置一致的元素
+                        // 高位链表：存放在扩容之后的数组下标的位置为当前数组下标位置+ 扩容之前数组长度的元素
                         Node<K,V> loHead = null, loTail = null;
                         Node<K,V> hiHead = null, hiTail = null;
+
                         Node<K,V> next;
                         do {
                             next = e.next;
+                            // 比如e.hash只能为两种可能  1 1111 或者 0 1111 ， oldCap 为 10000
                             if ((e.hash & oldCap) == 0) {
                                 if (loTail == null)
                                     loHead = e;
@@ -756,10 +799,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                                 hiTail = e;
                             }
                         } while ((e = next) != null);
+
+                        // 如果低位链表有数据
                         if (loTail != null) {
                             loTail.next = null;
                             newTab[j] = loHead;
                         }
+                        // 如果高位链表有数据
                         if (hiTail != null) {
                             hiTail.next = null;
                             newTab[j + oldCap] = hiHead;

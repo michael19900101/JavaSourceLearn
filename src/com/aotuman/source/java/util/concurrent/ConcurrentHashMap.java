@@ -755,6 +755,18 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         return (Node<K,V>)U.getObjectVolatile(tab, ((long)i << ASHIFT) + ABASE);
     }
 
+//    什么是CAS? 即比较并替换，实现并发算法时常用到的一种技术。CAS操作包含三个操作数——内存位置、预期原值及新值。执行CAS操作的时候，
+//    将内存位置的值与预期原值比较，如果相匹配，那么处理器会自动将该位置值更新为新值，否则，处理器不做任何操作。
+//        /**
+//         *  CAS
+//         * @param o         包含要修改field的对象
+//         * @param offset    对象中某field的偏移量
+//         * @param expected  期望值
+//         * @param update    更新值
+//         * @return          true | false
+//         */
+//        public final native boolean compareAndSwapObject(Object o, long offset,  Object expected, Object update);
+
     static final <K,V> boolean casTabAt(Node<K,V>[] tab, int i,
                                         Node<K,V> c, Node<K,V> v) {
         return U.compareAndSwapObject(tab, ((long)i << ASHIFT) + ABASE, c, v);
@@ -791,6 +803,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      * when table is null, holds the initial table size to use upon
      * creation, or 0 for default. After initialization, holds the
      * next element count value upon which to resize the table.
+     */
+    /**
+     * `sizeCtl`为0，代表数组未初始化， 且数组的初始容量为16
+     *
+     * `sizeCtl`为正数，如果数组未初始化，那么其记录的是数组的初始容量，如果数组已经初始化，那么其记录的是数组的扩容阈值
+     *
+     * `sizeCtl`为-1，表示数组正在进行初始化
+     *
+     * `sizeCtl`小于0，并且不是-1，表示数组正在扩容， -(1+n)，表示此时有n个线程正在共同完成数组的扩容操作
      */
     private transient volatile int sizeCtl;
 
@@ -1008,24 +1029,34 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
 
     /** Implementation for put and putIfAbsent */
     final V putVal(K key, V value, boolean onlyIfAbsent) {
+        // 如果有空值或者空键，直接抛异常
         if (key == null || value == null) throw new NullPointerException();
+        // 基于key计算hash值，并进行一定的扰动
         int hash = spread(key.hashCode());
+        // 记录某个桶上元素的个数，如果超过8个，会转成红黑树
         int binCount = 0;
         for (Node<K,V>[] tab = table;;) {
             Node<K,V> f; int n, i, fh;
+            // 如果数组还未初始化，先对数组进行初始化
             if (tab == null || (n = tab.length) == 0)
                 tab = initTable();
+            // 如果hash计算得到的桶位置没有元素，利用cas将元素添加
             else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+                // cas+自旋（和外侧的for构成自旋循环），保证元素添加安全
                 if (casTabAt(tab, i, null,
                              new Node<K,V>(hash, key, value, null)))
                     break;                   // no lock when adding to empty bin
             }
+            // 如果hash计算得到的桶位置元素的hash值为MOVED，证明正在扩容，那么协助扩容
             else if ((fh = f.hash) == MOVED)
                 tab = helpTransfer(tab, f);
             else {
+                // hash计算的桶位置元素不为空，且当前没有处于扩容操作，进行元素添加
                 V oldVal = null;
+                // 对当前桶进行加锁，保证线程安全，执行元素添加操作
                 synchronized (f) {
                     if (tabAt(tab, i) == f) {
+                        // 普通链表节点
                         if (fh >= 0) {
                             binCount = 1;
                             for (Node<K,V> e = f;; ++binCount) {
@@ -1046,6 +1077,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                                 }
                             }
                         }
+                        // 树节点，将元素添加到红黑树中
                         else if (f instanceof TreeBin) {
                             Node<K,V> p;
                             binCount = 2;
@@ -1059,14 +1091,17 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     }
                 }
                 if (binCount != 0) {
+                    // 链表长度大于或等于8，将链表转成红黑树
                     if (binCount >= TREEIFY_THRESHOLD)
                         treeifyBin(tab, i);
+                    // 如果是重复键，直接将旧值返回
                     if (oldVal != null)
                         return oldVal;
                     break;
                 }
             }
         }
+        // 添加的是新元素，维护集合长度，并判断是否要进行扩容操作
         addCount(1L, binCount);
         return null;
     }

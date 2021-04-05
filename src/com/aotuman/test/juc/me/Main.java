@@ -1,4 +1,4 @@
-package com.aotuman.test;
+package com.aotuman.test.juc.me;
 
 import org.openjdk.jol.info.ClassLayout;
 

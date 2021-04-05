@@ -1,4 +1,4 @@
-package com.aotuman.test;
+package com.aotuman.test.juc.me;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

@@ -748,22 +748,22 @@ public abstract class AbstractQueuedSynchronizer
 
         // Skip cancelled predecessors
         Node pred = node.prev;
-        while (pred.waitStatus > 0)
+        while (pred.waitStatus > 0) // 通过前驱节点，跳过取消状态的node
             node.prev = pred = pred.prev;
 
         // predNext is the apparent node to unsplice. CASes below will
         // fail if not, in which case, we lost race vs another cancel
         // or signal, so no further action is necessary.
-        Node predNext = pred.next;
+        Node predNext = pred.next; // 获取过滤后的前驱节点的后继节点
 
         // Can use unconditional write instead of CAS here.
         // After this atomic step, other Nodes can skip past us.
         // Before, we are free of interference from other threads.
-        node.waitStatus = Node.CANCELLED;
+        node.waitStatus = Node.CANCELLED; // 把当前node的状态设置为CANCELLED
 
         // If we are the tail, remove ourselves.
-        if (node == tail && compareAndSetTail(node, pred)) {
-            compareAndSetNext(pred, predNext, null);
+        if (node == tail && compareAndSetTail(node, pred)) { // 如果当前节点是尾节点，将从后往前的第一个非取消状态的节点设置为尾节点
+            compareAndSetNext(pred, predNext, null); // 如果更新成功，将tail的后继节点设置为null
         } else {
             // If successor needs signal, try to set pred's next-link
             // so it will get one. Otherwise wake it up to propagate.

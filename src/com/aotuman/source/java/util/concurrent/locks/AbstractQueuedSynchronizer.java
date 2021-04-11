@@ -386,14 +386,14 @@ public abstract class AbstractQueuedSynchronizer
         /** waitStatus value to indicate thread has cancelled */
         static final int CANCELLED =  1; // 表示线程取消了等待。如果取得锁的过程中发生了一些异常，则可能出现取消的情况，比如等待过程中出现了中断异常或者出现了timeout。
         /** waitStatus value to indicate successor's thread needs unparking */
-        static final int SIGNAL    = -1; // 表示后续节点需要被唤醒
+        static final int SIGNAL    = -1; // 表示线程已经准备好了，就等资源释放了
         /** waitStatus value to indicate thread is waiting on condition */
         static final int CONDITION = -2; // 线程等待在条件变量队列中。
         /**
          * waitStatus value to indicate the next acquireShared should
          * unconditionally propagate
          */
-        static final int PROPAGATE = -3;
+        static final int PROPAGATE = -3; // 当前线程处在SHARED情况下，该字段才会使用
 
         /**
          * Status field, taking on only the values:
